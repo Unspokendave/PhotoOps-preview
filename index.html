@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
+  <title>PhotoOps 2.0 Preview</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Photography Work Dashboard</p>
+      <h1>PhotoOps 2.0 Preview</h1>
+    </div>
+    <button id="themeBtn" class="icon-btn" aria-label="Toggle dark mode">◐</button>
+  </header>
+
+  <main>
+    <section class="hero-card">
+      <p class="eyebrow">Next Assignment</p>
+      <div id="nextAssignment" class="next-assignment">
+        <h2>No assignment saved yet</h2>
+        <p>Import or add your schedule to get started.</p>
+      </div>
+    </section>
+
+    <nav class="tabs" aria-label="Main navigation">
+      <button class="tab active" data-tab="dashboard">Dashboard</button>
+      <button class="tab" data-tab="schedule">Schedule</button>
+      <button class="tab" data-tab="team">Team</button>
+      <button class="tab" data-tab="import">Import</button>
+      <button class="tab" data-tab="settings">Settings</button>
+    </nav>
+
+    <section id="dashboard" class="panel active">
+      <div class="stats-grid">
+        <article class="stat-card">
+          <span>Upcoming</span>
+          <strong id="upcomingCount">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>Training</span>
+          <strong id="trainingCount">0</strong>
+        </article>
+        <article class="stat-card">
+          <span>Tentative/TBD</span>
+          <strong id="tentativeCount">0</strong>
+        </article>
+      </div>
+
+      <div class="section-heading">
+        <h2>Upcoming Assignments</h2>
+        <button id="addManualBtn" class="secondary-btn">+ Add</button>
+      </div>
+      <div id="dashboardList" class="assignment-list"></div>
+    </section>
+
+    <section id="schedule" class="panel">
+      <div class="toolbar">
+        <input id="searchInput" type="search" placeholder="Search school, city, or notes" aria-label="Search assignments" />
+        <select id="statusFilter" aria-label="Filter by status">
+          <option value="all">All statuses</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="training">Training</option>
+          <option value="tentative">Tentative</option>
+          <option value="tbd">TBD</option>
+        </select>
+      </div>
+      <div id="scheduleList" class="assignment-list"></div>
+    </section>
+
+    <section id="team" class="panel">
+      <h2>Team</h2>
+      <p>Choose a coworker to see their assignments. Counts reflect the selected assignment type.</p>
+      <div class="toolbar">
+        <input id="teamSearch" type="search" placeholder="Search coworkers" aria-label="Search coworkers" />
+        <select id="teamTypeFilter" aria-label="Filter Team by assignment type"><option value="all">All assignment types</option></select>
+      </div>
+      <div id="teamDirectory" class="team-directory" aria-live="polite"></div>
+      <h3 id="teamAssignmentsHeading">Select a coworker</h3>
+      <div id="teamAssignments" class="assignment-list"></div>
+      <details class="team-unresolved">
+        <summary id="teamUnresolvedSummary">Assignments without identified photographers</summary>
+        <p>These rows are retained, but no coworker names were inferred. Check the original notes and reimport with an explicit “Photographers: Name, Name” roster.</p>
+        <div id="teamUnresolved" class="assignment-list"></div>
+      </details>
+    </section>
+
+    <section id="import" class="panel">
+      <article class="form-card">
+        <h2>Import Work Schedule</h2>
+        <p>Paste the full company schedule. Your assignments go to Schedule; coworker assignments appear in Team. Names are read from trailing comma-separated rosters or explicit “Photographers:” labels. Unclear rows are retained for review in Team.</p>
+
+        <label for="nameFilter">Name to find</label>
+        <input id="nameFilter" value="David Denk" />
+
+        <label for="scheduleText">Paste schedule</label>
+        <textarea id="scheduleText" rows="16" placeholder="Paste the work schedule here..."></textarea>
+
+        <div class="button-row">
+          <button id="importBtn" class="primary-btn">Process Schedule</button>
+          <button id="sampleBtn" class="secondary-btn">Load Sample</button>
+        </div>
+        <p id="importMessage" class="message" aria-live="polite"></p>
+      </article>
+    </section>
+
+    <section id="settings" class="panel">
+      <article class="form-card">
+        <h2>Settings & Data</h2>
+        <label for="displayName">Your name</label>
+        <input id="displayName" value="David Denk" />
+
+        <label for="defaultLeadTime">Reminder lead time</label>
+        <select id="defaultLeadTime">
+          <option value="30">30 minutes</option>
+          <option value="45" selected>45 minutes</option>
+          <option value="60">1 hour</option>
+          <option value="90">1.5 hours</option>
+        </select>
+
+        <div class="button-row stack-mobile">
+          <button id="exportBtn" class="secondary-btn">Export Backup</button>
+          <label class="secondary-btn file-label">
+            Import Backup
+            <input id="backupInput" type="file" accept=".json" hidden />
+          </label>
+          <button id="clearBtn" class="danger-btn">Clear All Data</button>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <dialog id="assignmentDialog">
+    <form method="dialog" id="assignmentForm">
+      <div class="dialog-header">
+        <h2 id="dialogTitle">Add Assignment</h2>
+        <button id="closeAssignmentBtn" class="icon-btn" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <input id="editId" type="hidden" />
+
+      <label for="school">School / Assignment</label>
+      <input id="school" required />
+
+      <div class="form-grid">
+        <div>
+          <label for="date">Date</label>
+          <input id="date" type="date" required />
+        </div>
+        <div>
+          <label for="startTime">Start</label>
+          <input id="startTime" type="time" />
+        </div>
+        <div>
+          <label for="endTime">End / last appointment</label>
+          <input id="endTime" type="time" />
+        </div>
+        <div>
+          <label for="status">Status</label>
+          <select id="status">
+            <option value="confirmed">Confirmed</option>
+            <option value="training">Training</option>
+            <option value="tentative">Tentative</option>
+            <option value="tbd">TBD</option>
+          </select>
+        </div>
+      </div>
+
+      <label for="location">Location inside building</label>
+      <input id="location" placeholder="Gym, auditorium, cafeteria..." />
+
+      <label for="address">Street address</label>
+      <input id="address" />
+
+      <label for="notes">Notes</label>
+      <textarea id="notes" rows="4"></textarea>
+
+      <div class="button-row">
+        <button id="saveAssignmentBtn" class="primary-btn" type="submit" value="default">Save Assignment</button>
+        <button id="cancelAssignmentBtn" class="secondary-btn" type="button">Cancel</button>
+        <button id="deleteAssignmentBtn" class="danger-btn" type="button">Delete</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="assignmentTemplate">
+    <article class="assignment-card">
+      <div class="date-box">
+        <span class="month"></span>
+        <strong class="day"></strong>
+      </div>
+      <div class="assignment-main">
+        <div class="assignment-title-row">
+          <h3></h3>
+          <span class="status-pill"></span>
+        </div>
+        <p class="time-line"></p>
+        <p class="location-line"></p>
+        <p class="type-line"></p>
+        <p class="photographers-line"></p>
+        <p class="notes-line"></p>
+        <div class="card-actions">
+          <button class="small-btn details-btn">Details</button>
+          <a class="small-btn directions-btn" target="_blank" rel="noopener">Directions</a>
+          <button class="small-btn calendar-btn">Add to Calendar</button>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <script src="schedule.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
