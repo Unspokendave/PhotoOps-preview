@@ -127,10 +127,8 @@ dialog::backdrop { background: rgba(0,0,0,.55); backdrop-filter: blur(4px); }
 }
 
 .sync-row { border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin: 12px 0; background: var(--surface-2); overflow-wrap: anywhere; }
-.sync-row input[type="checkbox"] { width: auto; margin-right: 10px; }
 .sync-row p { white-space: pre-wrap; }
 #assignmentHistory { display: grid; gap: 8px; margin: 12px 0; }
-#syncPreview { margin-top: 20px; }
 #importMessage, #importedInfo { white-space: pre-wrap; overflow-wrap: anywhere; }
 .assignment-main { min-width: 0; overflow-wrap: anywhere; }
 
@@ -174,3 +172,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--text); outline-
   .calendar-month .calendar-count-word { display: none; }
   .calendar-month .calendar-count { display: inline-block; border-radius: 999px; padding: 2px 5px; background: var(--surface-2); color: var(--text); font-weight: 700; }
 }
+
+#importAttention, .import-help { margin: 16px 0; }
+#importAttention summary, .import-help summary { cursor: pointer; font-weight: 700; }
+#attentionItems button { margin: 5px; }

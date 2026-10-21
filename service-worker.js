@@ -1,4 +1,4 @@
-const CACHE = "PhotoOps-preview-v21-541834e-1";
+const CACHE = "PhotoOps-preview-v21-5528a66-1";
 const FILES = ["./", "./index.html", "./styles.css", "./app.js", "./sync.js", "./planner.js", "./storage.js", "./manifest.json", "./preview.json"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)));

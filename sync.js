@@ -14,13 +14,38 @@
     }
     return {school:title.trim()};
   }
-  function roster(text) {
-    const explicit=text.match(/\b(?:photographers?|staff)\s*:\s*(.+)$/i);
-    const tail=(explicit ? explicit[1] : text.split(/\s+-\s+/).at(-1)).replace(/\((?:training|confirmed|tentative|tbd)\)/ig,'').trim();
-    if(!explicit && !tail.includes(',')) return [];
-    const names=tail.split(/\s*[,;]\s*/);
-    return names.every(n=>/^[\p{L}][\p{L}’'.-]*(?:\s+[\p{L}][\p{L}’'.-]*){0,3}$/u.test(n) && !/\b(?:gym|school|address|pending|approval|notes|unknown|tbd|unassigned|cafeteria|training)\b/i.test(n)) ? [...new Map(names.map(n=>[norm(n),n])).values()] : [];
+  function nameKey(value) {
+    let text=norm(value).normalize('NFKC').replace(/[’]/g,"'").replace(/\./g,'');
+    const parts=text.split(',').map(s=>s.trim());
+    if(parts.length===2 && parts.every(Boolean))text=parts[1]+' '+parts[0];
+    return text.replace(/\s+/g,' ');
   }
+  function nameMatch(a,b) {return !!nameKey(a) && nameKey(a)===nameKey(b);}
+  function person(value) {
+    return /^[\p{L}][\p{L}’'.-]*(?:\s+[\p{L}][\p{L}’'.-]*){0,3}$/u.test(value) && !/\b(?:gym|school|hs|ms|es|address|location|pending|approval|notes|unknown|tbd|unassigned|cafeteria|auditorium|training|sportsmates|faculty|groups|individuals|senior|makeups|background|bkgd|confirmed|cancelled|canceled|stadium|field|stage)\b/i.test(value);
+  }
+  function entryParts(text,knownNames=[]) {
+    const parts=text.split(/\n|\s+-\s*/).map(s=>s.trim()).filter(Boolean);
+    let names=[];const consumed=new Set();
+    function read(value) {
+      value=value.replace(/\((?:training|confirmed|tentative|tbd)\)/ig,'').trim();
+      if(knownNames.some(n=>nameMatch(n,value)) && (person(value) || (value.split(',').length===2 && value.split(',').every(n=>person(n.trim())))))return [value];
+      const list=value.split(/\s*(?:,|;|&|\band\b)\s*/i).filter(Boolean);
+      if(list.length===2 && /^[A-Z]{2}$/.test(list[1]))return []; // An unlabelled city/state is not a person list.
+      return list.length && list.every(person)?list:[];
+    }
+    parts.forEach((part,index)=>{
+      const labeled=part.match(/\b(?:photographers?|staff|assigned to)\s*:\s*(.*?)(?=\s+(?:location|address|arrival|start|end|notes)\s*:|$)/i);
+      if(labeled) {const found=read(labeled[1]);names.push(...found);if(labeled.index===0)consumed.add(index);return;}
+      const structural=index===parts.length-1 || (index===0 && parts.length>1 && (category(parts[1]).assignmentType || /\b(?:HS|MS|ES|school|academy)\b/i.test(parts[1])));
+      if(structural || knownNames.some(n=>read(part).some(m=>nameMatch(n,m)))) {
+        const found=read(part);
+        if(found.length && (parts.length>1 || knownNames.some(n=>nameMatch(n,part)))) {names.push(...found);consumed.add(index);}
+      }
+    });
+    return {title:parts.find((part,i)=>!consumed.has(i) && !/^(?:(?:arrival|arrive|start|end|location|address|notes|id)\s*[:@]|\d{1,2}:\d{2}|(?:gym|cafeteria|auditorium|stadium|field)$)/i.test(part)) || '',photographers:[...new Map(names.map(n=>[nameKey(n),n])).values()]};
+  }
+  function roster(text) {return entryParts(text).photographers;}
   function time(value) {
     const m=String(value).trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
     if(!m) return undefined;
@@ -33,7 +58,7 @@
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return false;
     const d=new Date(date+'T12:00:00'); return !Number.isNaN(+d) && [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')===date;
   }
-  function parse(text, now=new Date()) {
+  function parse(text, now=new Date(), knownNames=[]) {
     const warnings=[]; let rows=[];
     if (/^[\s]*[\[{]/.test(text)) {
       const data=JSON.parse(text); const list=Array.isArray(data)?data:data.assignments;
@@ -42,6 +67,8 @@
         if(!a || typeof a!=='object' || Array.isArray(a)) return {};
         const out={...category(String(a.school || '')),date:a.date};
         for(const f of fields) if(present(a[f])) out[f]=clone(a[f]);
+        if(typeof out.photographers==='string')out.photographers=entryParts('Photographers: '+out.photographers,knownNames).photographers;
+        if(!out.photographers && typeof a.photographer==='string')out.photographers=entryParts('Photographers: '+a.photographer,knownNames).photographers;
         out.sourceId=String(a.sourceId || a.assignmentId || a.jobId || a.id || '').trim();
         if(present(a.notes) && !out.scheduleNotes) out.scheduleNotes=a.notes;
         const extras=Object.fromEntries(Object.entries(a).filter(([k])=>![...fields,'id','sourceId','assignmentId','jobId','notes','sync','history','manualFields'].includes(k)));
@@ -61,16 +88,16 @@
           if(!validDate(date)) {warnings.push(`Invalid date header: ${line}`); date=null;}
         } else if(date) {
           const title=line.split(/\s+-\s*/)[0];
-          if(block && (/^(?:\*\*C\*\*|C\s)/.test(line) || (/\s+-\s*/.test(line) && (category(title).assignmentType || /\d{1,2}:\d{2}\s*(am|pm)/i.test(line))))) flush();
-          block+=(block?' ':'')+line;
+          if(block && entryParts(block,knownNames).title && (/^(?:\*\*C\*\*|C\s)/.test(line) || (/\s+-\s*/.test(line) && (category(title).assignmentType || /\d{1,2}:\d{2}\s*(am|pm)/i.test(line))))) flush();
+          block+=(block?'\n':'')+line;
         } else warnings.push(`Unparsed text: ${line}`);
       }
       flush();
       rows=blocks.map(({date,text})=>{
         const sourceId=text.match(/\b(?:assignment\s*id|job\s*id|id)\s*:\s*([\w.-]+)/i)?.[1];
-        const clean=text.replace(/\[(?:assignment\s*id|job\s*id|id)\s*:\s*[\w.-]+\]/ig,'').replace(/\*\*/g,'').replace(/^C\s+/,'').trim();
-        const title=clean.split(/\s+-\s*/)[0];
-        const result={...category(title),date,sourceId,photographers:roster(clean),scheduleNotes:clean};
+        const clean=text.replace(/\[(?:assignment\s*id|job\s*id|id)\s*:\s*[\w.-]+\]/ig,'').replace(/\*\*/g,'').replace(/^C[ \t]+/gm,'').trim();
+        const parsed=entryParts(clean,knownNames);
+        const result={...category(parsed.title),date,sourceId,photographers:parsed.photographers,scheduleNotes:clean};
         const labeled=(label)=>clean.match(new RegExp('\\b(?:'+label+')\\s*[:@]?\\s*(\\d{1,2}:\\d{2}\\s*(?:am|pm)?)','i'));
         for(const [field,label] of [['arrivalTime','arrival|arrive|report'],['startTime','start'],['endTime','end|last appt']]) {
           const m=labeled(label); if(m) result[field]=time(m[1]);
@@ -98,7 +125,6 @@
         if(['confirmed','training','tentative','tbd'].includes(status)) a.status=status;
         else { warnings.push(`Row ${i+1}: unrecognized status retained in imported details, not applied as a status.`); a.scheduleDetails=[a.scheduleDetails,`Source status: ${a.status}`].filter(Boolean).join('\n'); delete a.status; }
       }
-      if(!a.photographers?.length) warnings.push(`Row ${i+1}: no recognized photographer roster. Use All Assignments or Review Each Import to include unmatched new work.`);
       accepted.push(a);
     });
     return {rows:accepted,warnings};
@@ -108,7 +134,7 @@
   }
   function comparable(a) {const result={};for(const f of fields) if(present(a[f])) result[f]=a[f];return result;}
   function fingerprint(a) {return JSON.stringify([a.sourceId || '',...fields.map(f=>Array.isArray(a[f]) ? a[f].map(norm).sort() : norm(a[f]))]);}
-  function overlap(a,b) {return (a||[]).some(n=>(b||[]).some(m=>norm(m)===norm(n)));}
+  function overlap(a,b) {return (a||[]).some(n=>(b||[]).some(m=>nameMatch(m,n)));}
   function changes(old, incoming, overrides=[]) {
     const result=[]; const source=old.sync?.source;
     for(const f of fields) {
@@ -141,7 +167,7 @@
       return norm(category(old.school).school)===norm(incoming.school) && equal(old.assignmentType,incoming.assignmentType) && old.date===incoming.date && (overlap(old.photographers,incoming.photographers) || (present(old.startTime) && old.startTime===incoming.startTime));
     });
     // A changed date without a stable ID is reviewed, even with a unique likely match.
-    return {candidates,confident:confident.length===1 && candidates.length===1,reason:candidates.length?'Possible match; verify identity, especially reschedules or recurring work':'No existing match'};
+    return {candidates:confident.length===1?confident:candidates,confident:confident.length===1,reason:candidates.length?'Possible match; verify identity, especially reschedules or recurring work':'No existing match'};
   }
   function plan(existing, rows, preferences={}) {
     const entries=[];const seen=new Set();let duplicates=0;
@@ -149,8 +175,8 @@
     for(const incoming of rows) {
       const fp=fingerprint(incoming);if(seen.has(fp)){duplicates++;continue;}seen.add(fp);
       const found=match(existing,incoming);
-      const mine=overlap(incoming.photographers,names);
-      if(preferences.mode==='mine' && !mine && !found.candidates.length) continue;
+      const mine=(incoming.photographers||[]).some(n=>names.some(m=>nameMatch(n,m)));
+      if(preferences.mode==='mine' && !mine) continue;
       const old=found.confident?found.candidates[0]:null;
       const diffs=old?changes(old,incoming):[];
       const status=old?(diffs.length?'updated':'unchanged'):found.candidates.length?'ambiguous':'new';
@@ -186,6 +212,17 @@
     }
     return clone(next);
   }
+  function automatic(existing,rows,preferences={},now=new Date().toISOString()) {
+    const proposed=plan(existing,rows,{...preferences,mode:preferences.mode==='all'?'all':'mine'});
+    const counts={added:0,updated:0,unchanged:0,attention:0};const attention=[];
+    for(const entry of proposed.entries) {
+      if(entry.status==='ambiguous') {attention.push({incoming:entry.incoming,candidates:entry.candidates,message:'This may be an existing or rescheduled assignment. Saved work was left unchanged.'});counts.attention++;}
+      else if(entry.status==='new')counts.added++;
+      else if(entry.status==='updated')counts.updated++;
+      else counts.unchanged++;
+    }
+    return {next:apply(existing,proposed.entries,now),counts,attention,duplicates:proposed.duplicates};
+  }
   function restore(a,index,now=new Date().toISOString()) {
     const event=a.history?.[index];if(!event?.previous) throw new Error('No prior values to restore.');
     const previous=clone(a);delete previous.history;
@@ -199,6 +236,6 @@
     start.setDate(start.getDate()-((start.getDay()+6)%7));const end=new Date(start);end.setDate(end.getDate()+7);
     return date>=start && date<end;
   }
-  const api={fields,norm,equal,category,roster,parse,info,changes,match,plan,apply,restore,inView,clone,validDate};
+  const api={fields,norm,equal,category,roster,parse,info,changes,match,plan,apply,restore,inView,clone,validDate,nameKey,nameMatch,entryParts,automatic};
   if(typeof module!=='undefined' && module.exports) module.exports=api;else root.PhotoOpsSync=api;
 })(globalThis);

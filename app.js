@@ -9,13 +9,13 @@ let lastSuggestedAddress = null;
 const STORAGE_KEY = "PhotoOpsPreviewAssignmentsV1";
 const Sync = PhotoOpsSync;
 const BACKUP_PREFIX = "PhotoOpsPreviewSyncBackupV21:";
-let pendingSync = null;
-let previewSource = null;
+const ATTENTION_KEY="PhotoOpsPreviewImportAttentionV21";
+let attention=JSON.parse(localStorage.getItem(ATTENTION_KEY) || "[]");
 const SETTINGS_KEY = "PhotoOpsPreviewSettingsV1";
 
 let loadedRaw = localStorage.getItem(STORAGE_KEY);
 let assignments = JSON.parse(loadedRaw || "[]");
-let settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{"displayName":"","aliases":[],"importMode":"mine","leadTime":45,"dark":false}');
+let settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{"displayName":"","aliases":[],"importMode":"mine","dark":false}');
 
 const $ = (id) => document.getElementById(id);
 const tabs = document.querySelectorAll(".tab");
@@ -25,9 +25,8 @@ if (settings.dark) document.body.classList.add("dark");
 $("displayName").value = settings.displayName || "";
 $("nameFilter").value = settings.displayName || "";
 $("nameAliases").value = (settings.aliases || []).join("\n");
-$("importMode").value = settings.importMode || "mine";
+$("importMode").value = settings.importMode === "all" ? "all" : "mine";
 $("viewDate").value = Planner.iso(new Date());
-$("defaultLeadTime").value = String(settings.leadTime || 45);
 
 tabs.forEach(tab => tab.addEventListener("click", () => {
   tabs.forEach(t => t.classList.remove("active"));
@@ -49,11 +48,6 @@ $("displayName").addEventListener("change", e => {
   saveSettings();
 });
 
-$("defaultLeadTime").addEventListener("change", e => {
-  settings.leadTime = Number(e.target.value);
-  saveSettings();
-});
-
 function saveSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
@@ -67,16 +61,18 @@ function saveAssignments(next) {
 
 // A single localStorage replacement commits the assignment array atomically.
 // Keep a durable exact pre-write snapshot; quota errors stop the write.
-async function commitBulk(next, expected, nextSchools, expectedSchools) {
+async function commitBulk(next, expected, nextSchools, expectedSchools, nextAttention, expectedAttention) {
   const commit = () => {
     if (localStorage.getItem(STORAGE_KEY) !== expected) throw new Error("Saved assignments changed. Preview the schedule again before applying it.");
-    const backup = {createdAt:new Date().toISOString(),assignmentsRaw:expected,settingsRaw:localStorage.getItem(SETTINGS_KEY),schoolsRaw:localStorage.getItem(SCHOOLS_KEY)};
+    const backup = {createdAt:new Date().toISOString(),assignmentsRaw:expected,settingsRaw:localStorage.getItem(SETTINGS_KEY),schoolsRaw:localStorage.getItem(SCHOOLS_KEY),attentionRaw:localStorage.getItem(ATTENTION_KEY)};
     localStorage.setItem(BACKUP_PREFIX + backup.createdAt + ":" + crypto.randomUUID(), JSON.stringify(backup));
     if (localStorage.getItem(STORAGE_KEY) !== expected) throw new Error("Another tab changed assignments. Preview again.");
     const writes={[STORAGE_KEY]:JSON.stringify(next)};
     const check={[STORAGE_KEY]:expected};
     if(nextSchools !== undefined) { writes[SCHOOLS_KEY]=JSON.stringify(nextSchools); check[SCHOOLS_KEY]=expectedSchools; }
+    if(nextAttention !== undefined) {writes[ATTENTION_KEY]=JSON.stringify(nextAttention);check[ATTENTION_KEY]=expectedAttention;}
     Store.transaction(localStorage,check,writes);
+    if(nextAttention !== undefined) {attention=nextAttention;renderAttention();}
     if(nextSchools !== undefined) { schools=nextSchools; loadedSchoolsRaw=localStorage.getItem(SCHOOLS_KEY); renderSchools(); }
     assignments = next; loadedRaw=localStorage.getItem(STORAGE_KEY);
     renderAll();
@@ -98,7 +94,7 @@ $("syncBackupBtn").addEventListener("click", () => {
   const keys=Object.keys(localStorage).filter(k=>k.startsWith(BACKUP_PREFIX)).sort();
   if(!keys.length) { alert("No safety backups yet. One is saved before synchronization or backup restoration."); return; }
   const backup=JSON.parse(localStorage.getItem(keys.at(-1)));
-  downloadBlob("photoops-safety-backup.json",JSON.stringify({assignments:JSON.parse(backup.assignmentsRaw || "[]"),settings:JSON.parse(backup.settingsRaw || "{}"),schools:JSON.parse(backup.schoolsRaw || "[]"),createdAt:backup.createdAt},null,2),"application/json");
+  downloadBlob("photoops-safety-backup.json",JSON.stringify({assignments:JSON.parse(backup.assignmentsRaw || "[]"),settings:JSON.parse(backup.settingsRaw || "{}"),schools:JSON.parse(backup.schoolsRaw || "[]"),attention:JSON.parse(backup.attentionRaw || "[]"),createdAt:backup.createdAt},null,2),"application/json");
 });
 
 function assignmentDateTime(a) {
@@ -181,7 +177,7 @@ function escapeHtml(value="") {
 }
 
 function saveSchools(next) {
-  const backup={createdAt:new Date().toISOString(),assignmentsRaw:localStorage.getItem(STORAGE_KEY),settingsRaw:localStorage.getItem(SETTINGS_KEY),schoolsRaw:localStorage.getItem(SCHOOLS_KEY)};
+  const backup={createdAt:new Date().toISOString(),assignmentsRaw:localStorage.getItem(STORAGE_KEY),settingsRaw:localStorage.getItem(SETTINGS_KEY),schoolsRaw:localStorage.getItem(SCHOOLS_KEY),attentionRaw:localStorage.getItem(ATTENTION_KEY)};
   if(backup.schoolsRaw!==loadedSchoolsRaw)throw new Error("The school directory changed in another tab. Reload before saving.");
   localStorage.setItem(BACKUP_PREFIX+backup.createdAt+":"+crypto.randomUUID(),JSON.stringify(backup));
   Store.transaction(localStorage,{[SCHOOLS_KEY]:loadedSchoolsRaw},{[SCHOOLS_KEY]:JSON.stringify(next)});
@@ -404,95 +400,62 @@ $("deleteAssignmentBtn").addEventListener("click", () => {
   }
 });
 
-function cancelPreview() { pendingSync=null; previewSource=null; $("syncPreview").hidden=true; }
-
-function updateSyncCounts() {
-  const entries=pendingSync.entries;
-  $("syncCounts").textContent=["new","updated","unchanged","ambiguous"].map(status=>`${entries.filter(e=>e.status===status).length} ${status}`).join(" · ") + ` · ${pendingSync.duplicates} identical uploaded rows ignored`;
-}
-
-const fieldLabel = field => ({arrivalTime:"Arrival time",startTime:"Start time",endTime:"End time",assignmentType:"Assignment type",scheduleNotes:"Imported schedule information"}[field] || field);
-const showValue = value => Array.isArray(value) ? value.join(", ") : String(value || "(not set)");
-function renderSyncPreview() {
-  $("syncRows").replaceChildren(); updateSyncCounts();
-  pendingSync.entries.forEach((entry,index) => {
-    const article=document.createElement("article"); article.className="sync-row";
-    const label=document.createElement("label");
-    const selected=document.createElement("input"); selected.type="checkbox"; selected.checked=entry.selected;
-    selected.disabled=entry.status==="unchanged";
-    selected.addEventListener("change",()=>{entry.selected=selected.checked;});
-    label.append(selected,document.createTextNode(`${entry.status.toUpperCase()}: ${entry.incoming.school} — ${entry.incoming.date}`));
-    article.append(label);
-    const identity=document.createElement("p");
-    const target=assignments.find(a=>a.id===entry.targetId);
-    identity.textContent=[entry.incoming.sourceId ? `Source ID: ${entry.incoming.sourceId}` : "No stable source ID", target ? `Matched saved assignment: ${target.school} — ${target.date} ${target.startTime || ""}` : ""].filter(Boolean).join(" • ");
-    article.append(identity);
-    const incoming=document.createElement("p"); incoming.textContent=Sync.fields.filter(f=>entry.incoming[f]).map(f=>`${fieldLabel(f)}: ${showValue(entry.incoming[f])}`).join(" • ");article.append(incoming);
-    if(entry.status==="ambiguous" || $("importMode").value==="review") {
-      const actionLabel=document.createElement("label");actionLabel.textContent="Import decision";
-      const decision=document.createElement("select"); decision.setAttribute("aria-label",`Import decision ${index+1}`);
-      decision.add(new Option("Skip this row","skip")); decision.add(new Option("Add as a separate new assignment","new"));
-      for(const id of entry.candidates) {
-        const old=assignments.find(a=>a.id===id); decision.add(new Option(`Update ${old.school} — ${old.date} ${old.startTime || ""}`,id));
-      }
-      decision.value=entry.action==="update"?entry.targetId:entry.action;
-      decision.disabled=entry.status==="unchanged";
-      decision.addEventListener("change",()=>{
-        entry.action=["new","skip"].includes(decision.value)?decision.value:"update";
-        entry.targetId=entry.action==="update"?decision.value:undefined;
-        entry.overrides=[];
-        entry.diffs=entry.targetId?Sync.changes(assignments.find(a=>a.id===entry.targetId),entry.incoming):[];
-        entry.selected=entry.action!=="skip";renderSyncPreview();
-      });
-      actionLabel.append(decision);article.append(actionLabel);
-      const reason=document.createElement("p");reason.textContent=entry.reason;article.append(reason);
+function cancelPreview() { $("importMessage").textContent=""; }
+function renderAttention() {
+  $("importAttention").hidden=!attention.length;
+  $("attentionSummary").textContent=`${attention.length} saved item${attention.length===1?"":"s"} need attention (optional)`;
+  $("attentionItems").replaceChildren();
+  for(const item of attention) {
+    const article=document.createElement("article");article.className="sync-row";
+    const text=document.createElement("p");text.textContent=[item.incoming?.school,item.incoming?.date,item.message].filter(Boolean).join(" — ");article.append(text);
+    const decision=document.createElement("select");decision.setAttribute("aria-label",`Match saved assignment for ${item.incoming?.school || 'item'}`);
+    decision.add(new Option("Choose a saved assignment",""));
+    for(const id of item.candidates || []) {const a=assignments.find(a=>a.id===id);if(a)decision.add(new Option(`${a.school} — ${a.date} ${a.startTime || ''}`,id));}
+    async function resolve(action) {
+      if(action==='update' && !decision.value)return;
+      if(action!=='dismiss' && !confirm(action==='update'?"Update the selected saved assignment using this schedule? Personal notes and custom fields will be kept.":"Add this as a separate assignment? Check that it is not already saved."))return;
+      try {
+        const expected=localStorage.getItem(STORAGE_KEY),saved=JSON.parse(expected || "[]");
+        const expectedQueue=localStorage.getItem(ATTENTION_KEY),queue=JSON.parse(expectedQueue || "[]");
+        if(!queue.some(a=>a.id===item.id))throw new Error("This item was already handled. Reload to refresh.");
+        const next=action==='dismiss'?saved:Sync.apply(saved,[{incoming:item.incoming,selected:true,action,targetId:decision.value,overrides:[]}]);
+        await commitBulk(next,expected,undefined,undefined,queue.filter(a=>a.id!==item.id),expectedQueue);
+        $("importMessage").textContent=action==='dismiss'?"Item dismissed. Saved assignments were not changed.":"Assignment saved. Personal notes and history were kept.";
+      }catch(error){alert(`No changes applied: ${error.message}`);}
     }
-    for(const diff of entry.diffs) {
-      const detail=document.createElement("p");
-      detail.textContent=`${fieldLabel(diff.field)}: ${showValue(diff.before)} → ${showValue(diff.incoming)}${diff.preserved?" (manual value kept)":""}`;
-      article.append(detail);
-      if(diff.preserved || entry.overrides.includes(diff.field)) {
-        const overrideLabel=document.createElement("label"); const override=document.createElement("input");override.type="checkbox";override.checked=entry.overrides.includes(diff.field);
-        override.addEventListener("change",()=>{
-          entry.overrides=override.checked?[...entry.overrides,diff.field]:entry.overrides.filter(f=>f!==diff.field);
-          entry.diffs=Sync.changes(assignments.find(a=>a.id===entry.targetId),entry.incoming,entry.overrides);
-          renderSyncPreview();
-        });
-        overrideLabel.append(override,document.createTextNode(`Use imported ${fieldLabel(diff.field)} instead of my manual value`));article.append(overrideLabel);
-      }
+    if(item.incoming) {
+      if(item.candidates?.length) {article.append(decision);const update=document.createElement("button");update.type="button";update.className="secondary-btn";update.textContent="Update selected assignment";update.addEventListener("click",()=>resolve('update'));article.append(update);}
+      const add=document.createElement("button");add.type="button";add.className="secondary-btn";add.textContent="Add separately";add.addEventListener("click",()=>resolve('new'));article.append(add);
     }
-    $("syncRows").append(article);
-  });
-  $("syncPreview").hidden=false;
+    const dismiss=document.createElement("button");dismiss.type="button";dismiss.className="secondary-btn";dismiss.textContent="Dismiss";dismiss.addEventListener("click",()=>resolve('dismiss'));article.append(dismiss);
+    $("attentionItems").append(article);
+  }
 }
-
-$("importBtn").addEventListener("click",()=>{
-  cancelPreview();
+function issueKey(item) {return JSON.stringify(item.incoming || item.message);}
+$("importBtn").addEventListener("click",async()=>{
+  const button=$("importBtn");button.disabled=true;
   try {
-    const name=$("nameFilter").value.trim();
-    if($("importMode").value==="mine" && !name && !(settings.aliases || []).length) throw new Error("Configure your name or aliases, or choose All Assignments / Review Each Import.");
-    const parsed=Sync.parse($("scheduleText").value);
-    previewSource=localStorage.getItem(STORAGE_KEY);
-    const saved=JSON.parse(previewSource || "[]");
-    assignments=saved; loadedRaw=previewSource;
-    pendingSync=Sync.plan(saved,parsed.rows,{name,aliases:settings.aliases || [],mode:$("importMode").value});
-    renderSyncPreview();
-    $("importMessage").textContent=parsed.warnings.join("\n") || `${parsed.rows.length} valid rows parsed. No changes saved yet.`;
-  } catch(error) { $("importMessage").textContent=`Preview stopped: ${error.message}`; }
-});
-$("cancelSyncBtn").addEventListener("click",()=>{cancelPreview();$("importMessage").textContent="Preview canceled. Saved assignments are unchanged.";});
-$("confirmSyncBtn").addEventListener("click",async()=>{
-  if(!pendingSync) return;
-  const button=$("confirmSyncBtn");button.disabled=true;
-  try {
-    if(pendingSync.entries.some(e=>e.selected && e.action==="skip")) throw new Error("Choose a decision for each selected ambiguous row, or uncheck it.");
-    const entries=pendingSync.entries.filter(e=>e.selected && e.action!=="skip");
-    if(!entries.length) {$("importMessage").textContent="No changes selected.";return;}
-    const next=Sync.apply(assignments,entries);
-    await commitBulk(next,previewSource);
-    cancelPreview(); $("importMessage").textContent="Synchronization complete. Previous data is backed up locally; missing assignments were retained.";
-  } catch(error) {$("importMessage").textContent=`Synchronization stopped; no assignments were written: ${error.message}`;}
-  finally {button.disabled=false;}
+    const name=$("nameFilter").value.trim(),aliases=settings.aliases || [],mode=$("importMode").value;
+    if(mode==='mine' && !name && !aliases.length)throw new Error("Enter a photographer name or choose All Assignments.");
+    const input=$("scheduleText").value.trim();if(!input)throw new Error("Paste a schedule or upload a file first.");
+    const parsed=Sync.parse(input,new Date(),[name,...aliases].filter(Boolean));
+    const expected=localStorage.getItem(STORAGE_KEY),saved=JSON.parse(expected || "[]");
+    const result=Sync.automatic(saved,parsed.rows,{name,aliases,mode});
+    const unknown=mode==='mine'?parsed.rows.filter(a=>!a.photographers?.length):[];
+    const issues=[...result.attention,...unknown.map(incoming=>({incoming,candidates:[],message:'No photographer could be identified for this entry. It was not imported.'}))];
+    if(parsed.warnings.length)issues.push({message:`${parsed.warnings.length} part${parsed.warnings.length===1?'':'s'} of the file could not be fully read. Use dated text entries or the documented JSON fields; no saved assignments were removed.`});
+    const expectedQueue=localStorage.getItem(ATTENTION_KEY),queue=JSON.parse(expectedQueue || "[]");
+    for(const issue of issues)if(!queue.some(old=>issueKey(old)===issueKey(issue)))queue.push({...issue,id:crypto.randomUUID()});
+    if(result.counts.added || result.counts.updated || queue.length!==JSON.parse(expectedQueue || "[]").length)await commitBulk(result.next,expected,undefined,undefined,queue,expectedQueue);
+    else {assignments=saved;loadedRaw=expected;attention=queue;renderAttention();renderAll();}
+    $("importAttention").open=false;
+    let explanation='';
+    if(!parsed.rows.length)explanation=' No supported assignments were found. Use dated text entries or a JSON schedule; see the supported formats.';
+    else if(mode==='mine' && unknown.length===parsed.rows.length)explanation=' No photographer names could be identified. Nothing was imported. Add a Photographers: name field or choose All Assignments.';
+    else if(mode==='mine' && !result.counts.added && !result.counts.updated && !result.counts.unchanged && !issues.length)explanation=' No assignments matched that name or its aliases. Try the exact name used in the schedule.';
+    $("importMessage").textContent=`Import complete: ${result.counts.added} added, ${result.counts.updated} updated, ${result.counts.unchanged} unchanged, ${issues.length} need attention.${explanation}`;
+  }catch(error){$("importMessage").textContent=`Import stopped. Saved assignments were not changed: ${error.message}`;}
+  finally{button.disabled=false;}
 });
 
 $("sampleBtn").addEventListener("click",()=>{
@@ -535,7 +498,7 @@ function downloadBlob(name, content, type) {
 }
 
 $("exportBtn").addEventListener("click", () => {
-  downloadBlob("photoops-backup.json", JSON.stringify({schemaVersion:21,assignments,settings,schools}, null, 2), "application/json");
+  downloadBlob("photoops-backup.json", JSON.stringify({schemaVersion:21,assignments,settings,schools,attention}, null, 2), "application/json");
 });
 
 $("backupInput").addEventListener("change", async e => {
@@ -548,11 +511,17 @@ $("backupInput").addEventListener("change", async e => {
     if(data.schools!==undefined && !Array.isArray(data.schools))throw new Error("Invalid school directory in backup");
     const expectedSchools=localStorage.getItem(SCHOOLS_KEY);
     const directoryMerge=Planner.mergeSchools(JSON.parse(expectedSchools || "[]"),data.schools || []);
+    const expectedAttention=localStorage.getItem(ATTENTION_KEY);
+    const mergedAttention=JSON.parse(expectedAttention || "[]");
+    if(data.attention!==undefined) {
+      if(!Array.isArray(data.attention) || data.attention.some(a=>!a || typeof a.id!=="string" || typeof a.message!=="string" || (a.incoming && (typeof a.incoming.school!=="string" || !Sync.validDate(a.incoming.date)))))throw new Error("Invalid saved attention items in backup");
+      for(const issue of data.attention)if(!mergedAttention.some(a=>a.id===issue.id || issueKey(a)===issueKey(issue)))mergedAttention.push(issue);
+    }
     const expected=localStorage.getItem(STORAGE_KEY);
     const current=JSON.parse(expected || "[]");
     // Preserve current records on ID conflicts; restoration of an individual version is explicit.
     const merged=[...current,...data.assignments.filter(a=>!current.some(old=>old.id===a.id)).map(a=>directoryMerge.idMap[a.schoolId]?{...a,schoolId:directoryMerge.idMap[a.schoolId]}:a)];
-    await commitBulk(merged,expected,data.schools===undefined?undefined:directoryMerge.schools,expectedSchools);
+    await commitBulk(merged,expected,data.schools===undefined?undefined:directoryMerge.schools,expectedSchools,data.attention===undefined?undefined:mergedAttention,expectedAttention);
     cancelPreview();
     alert("Backup merged. Existing assignments, schools, and settings were preserved.");
   } catch(error) {
@@ -571,4 +540,5 @@ if ("serviceWorker" in navigator) {
 }
 
 renderSchools();
+renderAttention();
 renderAll();

@@ -5,7 +5,7 @@
   function recover(storage) {
     const raw=storage.getItem(JOURNAL);if(!raw)return;
     const journal=JSON.parse(raw);
-    if(!journal || !Array.isArray(journal.before) || journal.before.some(([k,v])=>!['PhotoOpsPreviewAssignmentsV1','PhotoOpsPreviewSchoolsV1'].includes(k) || (v!==null && typeof v!=='string')))throw new Error('Invalid restore journal. Export local data before continuing.');
+    if(!journal || !Array.isArray(journal.before) || journal.before.some(([k,v])=>!['PhotoOpsPreviewAssignmentsV1','PhotoOpsPreviewSchoolsV1','PhotoOpsPreviewImportAttentionV21'].includes(k) || (v!==null && typeof v!=='string')))throw new Error('Invalid restore journal. Export local data before continuing.');
     for(const [key,value] of journal.before)restoreRaw(storage,key,value);
     storage.removeItem(JOURNAL);
   }

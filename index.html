@@ -105,29 +105,31 @@
     <section id="import" class="panel">
       <article class="form-card">
         <h2>Import Work Schedule</h2>
-        <p>Paste or upload a schedule, preview proposed changes, then confirm. Missing assignments are never deleted. Schedule dates without a year use the current schedule year; include explicit years for historical imports.</p>
+        <p>Enter a name, paste or upload your schedule, then import. Matching assignments update automatically; past assignments and personal notes are kept. Include the year when importing older schedules.</p>
 
         <label for="nameFilter">Name to find</label>
         <input id="nameFilter" placeholder="Your configured name" />
+        <p class="field-hint">My Assignments matches this name and your optional aliases in Settings. Use All Assignments to include everyone. Changing the name does not hide or delete assignments already saved.</p>
 
         <label for="importMode">Import mode</label>
-        <select id="importMode"><option value="mine">My Assignments</option><option value="all">All Assignments</option><option value="review">Review Each Import</option></select>
+        <select id="importMode"><option value="mine">My Assignments</option><option value="all">All Assignments</option></select>
         <label for="scheduleFile">Upload schedule (.txt or .json)</label>
         <input id="scheduleFile" type="file" accept=".txt,.json,text/plain,application/json" />
+        <details class="import-help"><summary>Supported schedule formats</summary>
+          <p>Text schedules need weekday/month/day headings (for example, Mon, Nov 2, 2026). Names can appear after the assignment, in a separated name field, or as Photographers: followed by one or more names. Shared names may be separated by commas, semicolons, &amp;, or “and”. School, time, and name fields should be separated by a dash or a new line.</p>
+          <p>Use the full name shown on the schedule, or add alternate forms in Settings. Case, extra spaces, periods, and “last, first” variations are supported; partial first-name matches are not guessed. JSON schedules support an assignments array with school, date, times, and photographer names. PDFs, images, spreadsheets, and arbitrary tables must first be converted to supported text or JSON.</p>
+        </details>
         <label for="scheduleText">Paste schedule</label>
         <textarea id="scheduleText" rows="16" placeholder="Paste the work schedule here..."></textarea>
 
         <div class="button-row">
-          <button id="importBtn" class="primary-btn">Preview Schedule Sync</button>
+          <button id="importBtn" class="primary-btn">Import &amp; Update Schedule</button>
           <button id="sampleBtn" class="secondary-btn">Load Sample</button>
         </div>
-        <section id="syncPreview" hidden aria-label="Schedule Sync Preview">
-          <h3>Schedule Sync Preview</h3>
-          <p id="syncCounts" aria-live="polite"></p>
-          <p>Uncheck rows to skip. Uncertain matches require an explicit decision. Protected manual fields stay unchanged unless you choose their imported values.</p>
-          <div id="syncRows"></div>
-          <div class="button-row"><button id="confirmSyncBtn" class="primary-btn" type="button">Confirm synchronization</button><button id="cancelSyncBtn" class="secondary-btn" type="button">Cancel preview</button></div>
-        </section>
+        <details id="importAttention" hidden>
+          <summary id="attentionSummary">Assignments needing attention</summary>
+          <div id="attentionItems"></div>
+        </details>
         <p id="importMessage" class="message" aria-live="polite"></p>
       </article>
     </section>
@@ -140,15 +142,7 @@
 
         <label for="nameAliases">Name aliases (one per line)</label>
         <textarea id="nameAliases" rows="3" placeholder="Alternate names used on schedules"></textarea>
-        <p>Your configured name, aliases, and import mode are stored only in this browser. My Assignments imports recognized roster matches and updates existing matched work even if its photographer changes.</p>
-        <label for="defaultLeadTime">Reminder lead time</label>
-        <select id="defaultLeadTime">
-          <option value="30">30 minutes</option>
-          <option value="45" selected>45 minutes</option>
-          <option value="60">1 hour</option>
-          <option value="90">1.5 hours</option>
-        </select>
-
+        <p>Your name, aliases, and import preference stay in this browser. My Assignments uses Name to Find plus these aliases; other photographers’ assignments are skipped. All Assignments imports everyone.</p>
         <div class="button-row stack-mobile">
           <button id="exportBtn" class="secondary-btn">Export Backup</button>
           <label class="secondary-btn file-label">
