@@ -1,5 +1,8 @@
 {
   "source_repository": "Unspokendave/PhotoOps",
-  "source_branch": "photoops-v2",
-  "source_commit": "6ba951327e0465b265ce7d6eeba852ce9c1c7fae"
+  "source_branch": "photoops-scheduling-v21",
+  "source_commit": "541834ea0b8b3b11bdc48727ac1ce9f50a8f65a8",
+  "preview_base_path": "/PhotoOps-preview/",
+  "storage_namespace": "PhotoOpsPreview",
+  "cache_name": "PhotoOps-preview-v21-541834e-1"
 }

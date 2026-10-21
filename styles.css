@@ -126,10 +126,51 @@ dialog::backdrop { background: rgba(0,0,0,.55); backdrop-filter: blur(4px); }
   .stack-mobile > * { width: 100%; }
 }
 
-.team-directory { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px; margin-bottom: 22px; }
-.coworker-btn { text-align: left; overflow-wrap: anywhere; }
-.coworker-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); }
-.team-unresolved { margin-top: 24px; }
-.team-unresolved summary { cursor: pointer; margin-bottom: 12px; }
+.sync-row { border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin: 12px 0; background: var(--surface-2); overflow-wrap: anywhere; }
+.sync-row input[type="checkbox"] { width: auto; margin-right: 10px; }
+.sync-row p { white-space: pre-wrap; }
+#assignmentHistory { display: grid; gap: 8px; margin: 12px 0; }
+#syncPreview { margin-top: 20px; }
+#importMessage, #importedInfo { white-space: pre-wrap; overflow-wrap: anywhere; }
 .assignment-main { min-width: 0; overflow-wrap: anywhere; }
-button:focus-visible { outline: 3px solid var(--muted); outline-offset: 2px; }
+
+[hidden] { display: none !important; }
+.filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.filter-grid label { margin: 8px 0; }
+.advanced-filters { padding: 12px; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 16px; background: var(--surface); }
+.advanced-filters summary { cursor: pointer; font-weight: 700; }
+.calendar-navigation { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.calendar-scroll { overflow-x: auto; max-width: 100%; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.calendar-week { min-width: 700px; }
+.calendar-day { min-width: 0; min-height: 110px; padding: 5px; border: 1px solid var(--border); }
+.calendar-week .calendar-day { min-height: 240px; }
+.calendar-date { border: 0; border-radius: 6px; background: transparent; color: var(--text); padding: 6px 2px; cursor: pointer; font: inherit; font-weight: 700; max-width: 100%; }
+.calendar-date:hover, .calendar-date:focus-visible { background: var(--surface-2); }
+.calendar-day.is-today { outline: 2px solid var(--text); outline-offset: -3px; }
+.calendar-day.outside-month { background: var(--surface-2); }
+.weekday { padding: 10px 2px; text-align: center; font-size: .8rem; color: var(--muted); }
+.calendar-count { display: block; color: var(--muted); font-size: .7rem; overflow-wrap: anywhere; margin-bottom: 4px; }
+.calendar-event { display: block; width: 100%; min-width: 0; border: 0; border-radius: 6px; padding: 7px 4px; margin-bottom: 4px; background: var(--accent); color: var(--accent-text); font: inherit; font-size: .76rem; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.day-timeline { list-style: none; padding: 0; margin: 0; }
+.day-timeline li { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 10px; border-left: 2px solid var(--border); padding: 8px; }
+.day-timeline time { font-size: .85rem; font-weight: 700; }
+.day-timeline .assignment-card { grid-template-columns: minmax(0, 1fr); }
+.day-timeline .date-box { display: none; }
+.field-hint { font-size: .85rem; color: var(--muted); }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+#calendarHeading { font-size: 1.1rem; }
+@media (max-width: 600px) {
+  .filter-grid { grid-template-columns: minmax(0, 1fr); }
+  .calendar-month .calendar-day { min-height: 90px; padding: 2px; }
+  .calendar-month .calendar-count { font-size: .62rem; }
+  .calendar-month .calendar-event { font-size: .65rem; padding: 6px 2px; }
+  .day-timeline li { grid-template-columns: 64px minmax(0, 1fr); gap: 6px; padding: 6px; }
+}
+
+.calendar-scroll-hint { display: none; color: var(--muted); font-size: .85rem; }
+@media (max-width: 740px) { .calendar-scroll-hint { display: block; } }
+@media (max-width: 600px) {
+  .calendar-month .calendar-count-word { display: none; }
+  .calendar-month .calendar-count { display: inline-block; border-radius: 999px; padding: 2px 5px; background: var(--surface-2); color: var(--text); font-weight: 700; }
+}

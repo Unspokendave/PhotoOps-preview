@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#111827" />
-  <title>PhotoOps 2.0 Preview</title>
+  <title>PhotoOps 2.1 Preview</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -12,7 +12,7 @@
   <header class="app-header">
     <div>
       <p class="eyebrow">Photography Work Dashboard</p>
-      <h1>PhotoOps 2.0 Preview</h1>
+      <h1>PhotoOps 2.1 Preview</h1>
     </div>
     <button id="themeBtn" class="icon-btn" aria-label="Toggle dark mode">◐</button>
   </header>
@@ -29,7 +29,7 @@
     <nav class="tabs" aria-label="Main navigation">
       <button class="tab active" data-tab="dashboard">Dashboard</button>
       <button class="tab" data-tab="schedule">Schedule</button>
-      <button class="tab" data-tab="team">Team</button>
+      <button class="tab" data-tab="schools">Schools</button>
       <button class="tab" data-tab="import">Import</button>
       <button class="tab" data-tab="settings">Settings</button>
     </nav>
@@ -68,41 +68,66 @@
           <option value="tbd">TBD</option>
         </select>
       </div>
+      <details class="advanced-filters" open>
+        <summary>Advanced filters</summary>
+        <div class="filter-grid">
+          <label>School<select id="schoolFilter" aria-label="Filter by school"><option value="">All schools</option></select></label>
+          <label>Assignment type<select id="typeFilter" aria-label="Filter by assignment type"><option value="">All types</option></select></label>
+          <label>Start date<input id="filterStart" type="date" aria-label="Filter start date" /></label>
+          <label>End date<input id="filterEnd" type="date" aria-label="Filter end date" /></label>
+        </div>
+        <button id="resetFilters" class="secondary-btn" type="button">Reset Filters</button>
+      </details>
+      <div class="toolbar">
+        <select id="scheduleView" aria-label="Schedule view"><option value="all">All dates (including history)</option><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option></select>
+        <input id="viewDate" type="date" aria-label="Schedule view date" />
+      </div>
+      <div class="calendar-navigation" aria-label="Calendar navigation">
+        <button id="calendarPrevious" class="secondary-btn" type="button" aria-label="Previous calendar period">Previous</button>
+        <button id="calendarToday" class="secondary-btn" type="button">Today</button>
+        <button id="calendarNext" class="secondary-btn" type="button" aria-label="Next calendar period">Next</button>
+      </div>
+      <h2 id="calendarHeading"></h2>
+      <p id="filterCount" role="status" aria-live="polite"></p>
+      <p id="filterEmpty" class="empty-state" hidden>No assignments match. Try another date or view, or reset your filters.</p>
+      <div id="calendarView"></div>
       <div id="scheduleList" class="assignment-list"></div>
     </section>
 
-    <section id="team" class="panel">
-      <h2>Team</h2>
-      <p>Choose a coworker to see their assignments. Counts reflect the selected assignment type.</p>
-      <div class="toolbar">
-        <input id="teamSearch" type="search" placeholder="Search coworkers" aria-label="Search coworkers" />
-        <select id="teamTypeFilter" aria-label="Filter Team by assignment type"><option value="all">All assignment types</option></select>
-      </div>
-      <div id="teamDirectory" class="team-directory" aria-live="polite"></div>
-      <h3 id="teamAssignmentsHeading">Select a coworker</h3>
-      <div id="teamAssignments" class="assignment-list"></div>
-      <details class="team-unresolved">
-        <summary id="teamUnresolvedSummary">Assignments without identified photographers</summary>
-        <p>These rows are retained, but no coworker names were inferred. Check the original notes and reimport with an explicit “Photographers: Name, Name” roster.</p>
-        <div id="teamUnresolved" class="assignment-list"></div>
-      </details>
+    <section id="schools" class="panel">
+      <div class="section-heading"><h2>School Directory</h2><button id="addSchoolBtn" class="secondary-btn" type="button">+ Add School</button></div>
+      <input id="schoolSearch" type="search" aria-label="Search school directory" placeholder="Search name, address, city, or notes" />
+      <p>Saved locally. Editing or removing a school never changes existing assignment addresses.</p>
+      <p id="schoolCount" role="status"></p>
+      <div id="schoolDirectory" class="assignment-list"></div>
     </section>
 
     <section id="import" class="panel">
       <article class="form-card">
         <h2>Import Work Schedule</h2>
-        <p>Paste the full company schedule. Your assignments go to Schedule; coworker assignments appear in Team. Names are read from trailing comma-separated rosters or explicit “Photographers:” labels. Unclear rows are retained for review in Team.</p>
+        <p>Paste or upload a schedule, preview proposed changes, then confirm. Missing assignments are never deleted. Schedule dates without a year use the current schedule year; include explicit years for historical imports.</p>
 
         <label for="nameFilter">Name to find</label>
-        <input id="nameFilter" value="David Denk" />
+        <input id="nameFilter" placeholder="Your configured name" />
 
+        <label for="importMode">Import mode</label>
+        <select id="importMode"><option value="mine">My Assignments</option><option value="all">All Assignments</option><option value="review">Review Each Import</option></select>
+        <label for="scheduleFile">Upload schedule (.txt or .json)</label>
+        <input id="scheduleFile" type="file" accept=".txt,.json,text/plain,application/json" />
         <label for="scheduleText">Paste schedule</label>
         <textarea id="scheduleText" rows="16" placeholder="Paste the work schedule here..."></textarea>
 
         <div class="button-row">
-          <button id="importBtn" class="primary-btn">Process Schedule</button>
+          <button id="importBtn" class="primary-btn">Preview Schedule Sync</button>
           <button id="sampleBtn" class="secondary-btn">Load Sample</button>
         </div>
+        <section id="syncPreview" hidden aria-label="Schedule Sync Preview">
+          <h3>Schedule Sync Preview</h3>
+          <p id="syncCounts" aria-live="polite"></p>
+          <p>Uncheck rows to skip. Uncertain matches require an explicit decision. Protected manual fields stay unchanged unless you choose their imported values.</p>
+          <div id="syncRows"></div>
+          <div class="button-row"><button id="confirmSyncBtn" class="primary-btn" type="button">Confirm synchronization</button><button id="cancelSyncBtn" class="secondary-btn" type="button">Cancel preview</button></div>
+        </section>
         <p id="importMessage" class="message" aria-live="polite"></p>
       </article>
     </section>
@@ -111,8 +136,11 @@
       <article class="form-card">
         <h2>Settings & Data</h2>
         <label for="displayName">Your name</label>
-        <input id="displayName" value="David Denk" />
+        <input id="displayName" placeholder="Your configured name" />
 
+        <label for="nameAliases">Name aliases (one per line)</label>
+        <textarea id="nameAliases" rows="3" placeholder="Alternate names used on schedules"></textarea>
+        <p>Your configured name, aliases, and import mode are stored only in this browser. My Assignments imports recognized roster matches and updates existing matched work even if its photographer changes.</p>
         <label for="defaultLeadTime">Reminder lead time</label>
         <select id="defaultLeadTime">
           <option value="30">30 minutes</option>
@@ -127,6 +155,7 @@
             Import Backup
             <input id="backupInput" type="file" accept=".json" hidden />
           </label>
+          <button id="syncBackupBtn" class="secondary-btn" type="button">Export latest safety backup</button>
           <button id="clearBtn" class="danger-btn">Clear All Data</button>
         </div>
       </article>
@@ -143,12 +172,19 @@
       <input id="editId" type="hidden" />
 
       <label for="school">School / Assignment</label>
-      <input id="school" required />
+      <input id="school" list="schoolSuggestions" required autocomplete="off" />
+      <datalist id="schoolSuggestions"></datalist>
+      <input id="assignmentSchoolId" type="hidden" />
+      <p class="field-hint">Choose a saved suggestion to fill its address. You can override the address for this assignment.</p>
 
       <div class="form-grid">
         <div>
           <label for="date">Date</label>
           <input id="date" type="date" required />
+        </div>
+        <div>
+          <label for="arrivalTime">Arrival</label>
+          <input id="arrivalTime" type="time" />
         </div>
         <div>
           <label for="startTime">Start</label>
@@ -169,6 +205,12 @@
         </div>
       </div>
 
+      <label for="assignmentType">Assignment type</label>
+      <input id="assignmentType" />
+      <label for="photographers">Photographers (comma separated)</label>
+      <input id="photographers" />
+      <label for="contacts">Contacts</label>
+      <textarea id="contacts" rows="2"></textarea>
       <label for="location">Location inside building</label>
       <input id="location" placeholder="Gym, auditorium, cafeteria..." />
 
@@ -178,11 +220,31 @@
       <label for="notes">Notes</label>
       <textarea id="notes" rows="4"></textarea>
 
+      <details><summary>Imported schedule information & change history</summary><p id="importedInfo"></p><div id="assignmentHistory"></div></details>
       <div class="button-row">
         <button id="saveAssignmentBtn" class="primary-btn" type="submit" value="default">Save Assignment</button>
         <button id="cancelAssignmentBtn" class="secondary-btn" type="button">Cancel</button>
+        <button id="dialogCalendarBtn" class="secondary-btn" type="button">Add to Calendar</button>
         <button id="deleteAssignmentBtn" class="danger-btn" type="button">Delete</button>
       </div>
+    </form>
+  </dialog>
+
+  <dialog id="schoolDialog">
+    <form id="schoolForm">
+      <div class="dialog-header"><h2 id="schoolDialogTitle">Add School</h2><button id="closeSchoolBtn" class="icon-btn" type="button" aria-label="Close school window">✕</button></div>
+      <input id="schoolEditId" type="hidden" />
+      <label for="schoolName">School name</label><input id="schoolName" required />
+      <label for="schoolAddress">Street address</label><input id="schoolAddress" required />
+      <div class="form-grid">
+        <div><label for="schoolCity">City</label><input id="schoolCity" required /></div>
+        <div><label for="schoolState">State / region</label><input id="schoolState" required /></div>
+        <div><label for="schoolZip">ZIP / postal code</label><input id="schoolZip" required /></div>
+        <div><label for="schoolPhone">Phone (optional)</label><input id="schoolPhone" type="tel" /></div>
+      </div>
+      <label for="schoolNotes">Notes</label><textarea id="schoolNotes" rows="3"></textarea>
+      <p id="schoolMessage" role="alert"></p>
+      <div class="button-row"><button class="primary-btn" type="submit">Save School</button><button id="cancelSchoolBtn" class="secondary-btn" type="button">Cancel</button></div>
     </form>
   </dialog>
 
@@ -199,8 +261,7 @@
         </div>
         <p class="time-line"></p>
         <p class="location-line"></p>
-        <p class="type-line"></p>
-        <p class="photographers-line"></p>
+        <p class="sync-line"></p>
         <p class="notes-line"></p>
         <div class="card-actions">
           <button class="small-btn details-btn">Details</button>
@@ -211,7 +272,9 @@
     </article>
   </template>
 
-  <script src="schedule.js"></script>
+  <script src="planner.js"></script>
+  <script src="storage.js"></script>
+  <script src="sync.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

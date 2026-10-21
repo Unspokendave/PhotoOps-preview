@@ -1,11 +1,11 @@
 {
-  "name": "PhotoOps 2.0 Preview",
+  "name": "PhotoOps 2.1 Preview",
   "short_name": "PhotoOps Preview",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#090d16",
   "theme_color": "#111827",
   "description": "Mobile photography work schedule and assignment dashboard.",
-  "scope": "./",
-  "id": "./"
+  "id": "./",
+  "scope": "./"
 }
